@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-db-navy: #0A1628;
+  --color-db-navy-light: #121F36;
+  --color-db-navy-mid: #1A2A45;
+  --color-db-blue: #1E3A5F;
+  --color-db-orange: #F26522;
+  --color-db-orange-dark: #D4510F;
+  --color-db-cream: #FFF8E7;
+  --color-db-gold: #D4A853;
+  --color-db-green: #66BB6A;
+  --color-db-red: #EF5350;
+  --color-db-purple: #AB47BC;
+  --color-db-cyan: #26C6DA;
+  --color-rarity-common: #78909C;
+  --color-rarity-uncommon: #66BB6A;
+  --color-rarity-rare: #42A5F5;
+  --color-rarity-ultra: #AB47BC;
+  --color-rarity-grail: #FFD740;
+  --font-display: "Bebas Neue", sans-serif;
+  --font-body: "DM Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  background: var(--color-db-navy);
+  color: var(--color-db-cream);
+  font-family: var(--font-body);
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-db-navy); }
+::-webkit-scrollbar-thumb { background: var(--color-db-blue); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-db-orange); }
+
+@keyframes rarity-pulse {
+  0%, 100% { box-shadow: 0 0 8px var(--glow-color); }
+  50% { box-shadow: 0 0 20px var(--glow-color); }
+}
+.rarity-glow { animation: rarity-pulse 2s ease-in-out infinite; }
+
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(30, 58, 95, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30, 58, 95, 0.3) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
