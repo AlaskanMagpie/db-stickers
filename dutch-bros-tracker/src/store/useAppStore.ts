@@ -10,8 +10,14 @@ import type {
   EbaySale,
 } from '../types';
 import { STICKER_CATALOG, STICKER_BY_ID } from '../data/stickers';
+import { preseededAsEstimatedCache } from '../data/prices';
 
 const MAX_PERSISTED_SALES = 6;
+
+export interface UpdateMarketDataOptions {
+  /** Keep hero/grid thumbnail and per-row listing images; only refresh $ fields + metadata from the new pull. */
+  preserveVisuals?: boolean;
+}
 
 export interface CachedMarketData {
   low: number;
@@ -37,7 +43,11 @@ interface AppState {
 
   // Price cache (thumbnails + comps come from eBay / Firecrawl pulls)
   priceCache: Record<string, CachedMarketData>;
-  updateMarketData: (stickerId: string, data: PriceData | null) => void;
+  updateMarketData: (
+    stickerId: string,
+    data: PriceData | null,
+    options?: UpdateMarketDataOptions,
+  ) => void;
 
   // Config
   config: AppConfig;
@@ -77,7 +87,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       inventory: {},
       filters: DEFAULT_FILTERS,
-      priceCache: {},
+      priceCache: preseededAsEstimatedCache(),
       config: DEFAULT_CONFIG,
       selectedStickerId: null,
       view: 'grid',
@@ -120,21 +130,39 @@ export const useAppStore = create<AppState>()(
 
       resetFilters: () => set({ filters: DEFAULT_FILTERS }),
 
-      updateMarketData: (stickerId, data) =>
+      updateMarketData: (stickerId, data, options) =>
         set((state) => {
           if (!data) {
             const next = { ...state.priceCache };
             delete next[stickerId];
             return { priceCache: next };
           }
-          const recentSales = data.recentSales?.slice(0, MAX_PERSISTED_SALES);
+          const prev = state.priceCache[stickerId];
+          const incoming = data.recentSales?.slice(0, MAX_PERSISTED_SALES) ?? [];
+          let recentSales: EbaySale[] | undefined =
+            incoming.length > 0 ? incoming : undefined;
+          let thumbnailUrl =
+            data.thumbnailUrl ?? incoming.find((s) => s.imageUrl)?.imageUrl;
+
+          if (options?.preserveVisuals && prev) {
+            thumbnailUrl = prev.thumbnailUrl ?? thumbnailUrl;
+            if (incoming.length > 0) {
+              recentSales = incoming.map((s, i) => ({
+                ...s,
+                imageUrl: prev.recentSales?.[i]?.imageUrl ?? s.imageUrl,
+              }));
+            } else if (prev.recentSales?.length) {
+              recentSales = prev.recentSales;
+            }
+          }
+
           const entry: CachedMarketData = {
             low: data.low,
             median: data.median,
             high: data.high,
             lastUpdated: data.lastUpdated,
             source: data.source,
-            thumbnailUrl: data.thumbnailUrl ?? recentSales?.find((s) => s.imageUrl)?.imageUrl,
+            thumbnailUrl,
             recentSales,
           };
           return {
@@ -212,6 +240,11 @@ export const useAppStore = create<AppState>()(
         config: state.config,
         view: state.view,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.priceCache = { ...preseededAsEstimatedCache(), ...state.priceCache };
+        }
+      },
     }
   )
 );

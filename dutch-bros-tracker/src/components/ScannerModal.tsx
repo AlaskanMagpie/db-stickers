@@ -276,7 +276,8 @@ export default function ScannerModal({
             {refEntries.length === 0 && (
               <div className="rounded-xl border border-db-orange/40 bg-db-orange/10 px-3 py-2 text-xs text-db-cream/80">
                 No reference photos yet. Run <strong>Fetch all prices & photos</strong> on the main screen (or refresh
-                prices per sticker) so visual matching has thumbnails to compare against.
+                per sticker without “price only”) so visual matching has thumbnails. <strong>Prices only</strong> keeps
+                existing images and won’t add new ones.
               </div>
             )}
 

@@ -1,0 +1,12 @@
+{
+  "name": "db-stickers",
+  "private": true,
+  "description": "Root scripts — app lives in dutch-bros-tracker/",
+  "scripts": {
+    "dev": "npm run dev --prefix dutch-bros-tracker",
+    "build": "npm run build --prefix dutch-bros-tracker",
+    "preview": "npm run preview --prefix dutch-bros-tracker",
+    "lint": "npm run lint --prefix dutch-bros-tracker",
+    "install:app": "npm install --prefix dutch-bros-tracker"
+  }
+}

@@ -54,6 +54,17 @@ export interface EbaySale {
   imageUrl?: string;
 }
 
+/** One row from eBay search / Firecrawl extract before comp filtering. */
+export interface EbaySearchResult {
+  title: string;
+  price: number;
+  currency: string;
+  condition: string;
+  imageUrl?: string;
+  itemUrl: string;
+  endDate: string;
+}
+
 export interface InventoryItem {
   stickerId: string;
   quantity: number;

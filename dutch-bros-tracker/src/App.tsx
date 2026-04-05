@@ -3,6 +3,7 @@ import { useAppStore } from './store/useAppStore';
 import { stickerImageUrl } from './utils/stickerImage';
 import { STICKER_CATALOG, CATALOG_YEARS, CATEGORY_LABELS, RARITY_LABELS, STICKER_BY_ID } from './data/stickers';
 import { filterStickers, formatCurrency, formatDate, getRarityColor, getCategoryIcon } from './utils/helpers';
+import { hasPricingSource, resolveFirecrawlKey } from './utils/apiKeys';
 import { fetchStickerPrice, fetchAllStickerPrices } from './services/ebay';
 import type { Sticker, StickerCategory, StickerRarity, StickerCondition } from './types';
 import {
@@ -102,10 +103,17 @@ function StickerCard({ sticker, onClick }: { sticker: Sticker; onClick: () => vo
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-db-orange/20 text-db-orange">📍 {sticker.region}</span>
           )}
         </div>
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-db-cream/40">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-db-cream/40 flex items-center gap-1.5 min-w-0">
             {price ? (
-              <span className="text-db-gold font-mono">{formatCurrency(price.median)}</span>
+              <>
+                <span className="text-db-gold font-mono shrink-0">{formatCurrency(price.median)}</span>
+                {price.source === 'estimated' && (
+                  <span className="text-[9px] uppercase tracking-wider text-db-cyan/70 font-mono border border-db-cyan/25 px-1 py-0.5 rounded">
+                    Guide
+                  </span>
+                )}
+              </>
             ) : (
               <span className="italic">No price data</span>
             )}
@@ -135,6 +143,8 @@ function DetailPanel({ sticker, onClose }: { sticker: Sticker; onClose: () => vo
   const [addCondition, setAddCondition] = useState<StickerCondition>('mint');
   const [addCost, setAddCost] = useState('');
   const [fetchingPrice, setFetchingPrice] = useState(false);
+  const [priceFetchError, setPriceFetchError] = useState<string | null>(null);
+  const [priceOnlyRefresh, setPriceOnlyRefresh] = useState(false);
 
   const items = inventory[sticker.id] || [];
   const qty = getTotalQuantity(sticker.id);
@@ -144,14 +154,22 @@ function DetailPanel({ sticker, onClose }: { sticker: Sticker; onClose: () => vo
 
   const handleFetchPrice = async () => {
     setFetchingPrice(true);
+    setPriceFetchError(null);
     try {
+      const fc = resolveFirecrawlKey(config.firecrawl.apiKey);
       const result = await fetchStickerPrice(
         sticker.ebaySearchQuery,
         config.ebay.apiKey,
-        config.firecrawl.apiKey,
+        fc,
       );
       if (result) {
-        updateMarketData(sticker.id, result);
+        updateMarketData(sticker.id, result, { preserveVisuals: priceOnlyRefresh });
+      } else if (hasPricingSource(config)) {
+        setPriceFetchError(
+          fc
+            ? 'Firecrawl returned no sold listings (or credits exhausted). Check the browser console — each sold scrape often takes 30–60s; keep this open until it finishes.'
+            : 'eBay Browse API returned no items. Add a Firecrawl key for sold comps, or verify your eBay token.',
+        );
       }
     } finally {
       setFetchingPrice(false);
@@ -222,17 +240,26 @@ function DetailPanel({ sticker, onClose }: { sticker: Sticker; onClose: () => vo
 
           {/* Market Value */}
           <div className="bg-db-navy/60 rounded-xl p-4 border border-db-blue/20">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-xs uppercase tracking-wider text-db-cream/50 font-mono">Market comps</h3>
               <button
                 onClick={handleFetchPrice}
-                disabled={fetchingPrice || (!config.ebay.apiKey && !config.firecrawl.apiKey)}
-                className="flex items-center gap-1 text-xs text-db-orange hover:text-db-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                disabled={fetchingPrice || !hasPricingSource(config)}
+                className="flex items-center gap-1 text-xs text-db-orange hover:text-db-gold disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
               >
                 <RefreshCw size={12} className={fetchingPrice ? 'animate-spin' : ''} />
                 {fetchingPrice ? 'Fetching...' : 'Refresh Price'}
               </button>
             </div>
+            <label className="mb-3 flex cursor-pointer items-center gap-2 text-[10px] text-db-cream/45 select-none">
+              <input
+                type="checkbox"
+                checked={priceOnlyRefresh}
+                onChange={(e) => setPriceOnlyRefresh(e.target.checked)}
+                className="h-3.5 w-3.5 accent-db-orange rounded border-db-blue/40"
+              />
+              Price update only — keep existing listing photos in the vault
+            </label>
             {price ? (
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="bg-db-navy/50 rounded-lg p-2">
@@ -250,16 +277,32 @@ function DetailPanel({ sticker, onClose }: { sticker: Sticker; onClose: () => vo
               </div>
             ) : (
               <p className="text-sm text-db-cream/40 italic text-center py-2">
-                {config.ebay.apiKey || config.firecrawl.apiKey
+                {hasPricingSource(config)
                   ? 'Click "Refresh Price" to fetch from eBay'
-                  : 'Add eBay or Firecrawl API key in ⚙ Settings to enable pricing'}
+                  : 'Add eBay or Firecrawl API key in ⚙ Settings (or VITE_FIRECRAWL_API_KEY in .env.local) to enable pricing'}
               </p>
+            )}
+            {resolveFirecrawlKey(config.firecrawl.apiKey) && (
+              <p className="text-[10px] text-db-cream/35 mt-2 text-center leading-snug">
+                Firecrawl sold scrapes are slow (often 30–60s). Wait on this screen until the request completes.
+              </p>
+            )}
+            {priceFetchError && (
+              <p className="text-[10px] text-db-red/90 mt-2 text-center leading-snug">{priceFetchError}</p>
             )}
             {price?.source && (
               <p className="text-[10px] text-db-cream/30 mt-2 text-center font-mono leading-snug">
                 {price.source === 'ebay_api' && 'eBay Browse API — active listings (asking prices).'}
-                {price.source === 'firecrawl' && 'Scraped eBay sold results — closer to sold comps.'}
-                {price.source !== 'ebay_api' && price.source !== 'firecrawl' && `Source: ${price.source}`}
+                {price.source === 'firecrawl' &&
+                  'Scraped eBay sold results — low/median/high from up to 5 listings that look like single stickers (lots/bundles skipped).'}
+                {price.source === 'estimated' &&
+                  'Pre-seeded market guide (Mar 2026) from sold listings & collector channels — use Refresh for live comps.'}
+                {price.source === 'manual' && 'Manually entered.'}
+                {price.source !== 'ebay_api' &&
+                  price.source !== 'firecrawl' &&
+                  price.source !== 'estimated' &&
+                  price.source !== 'manual' &&
+                  `Source: ${price.source}`}
               </p>
             )}
             {price && price.recentSales && price.recentSales.length > 0 && (
@@ -401,6 +444,7 @@ function DetailPanel({ sticker, onClose }: { sticker: Sticker; onClose: () => vo
 /* ── Settings Modal ───────────────────────────────────── */
 function SettingsPanel({ onClose }: { onClose: () => void }) {
   const { config, updateConfig, inventory, priceCache } = useAppStore();
+  const envFirecrawl = import.meta.env.VITE_FIRECRAWL_API_KEY?.trim();
   const [ebayKey, setEbayKey] = useState(config.ebay.apiKey || '');
   const [fcKey, setFcKey] = useState(config.firecrawl.apiKey || '');
 
@@ -454,6 +498,11 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
               className="w-full bg-db-navy border border-db-blue/30 rounded-lg px-3 py-2 text-sm text-db-cream placeholder:text-db-cream/20 focus:border-db-orange/50 focus:outline-none"
             />
             <p className="text-[10px] text-db-cream/30 mt-1">Fallback scraper for eBay sold listings</p>
+            {envFirecrawl && (
+              <p className="text-[10px] text-db-green/50 mt-1 font-mono">
+                Active: VITE_FIRECRAWL_API_KEY from .env.local (restart dev server after changing it)
+              </p>
+            )}
           </div>
 
           <div className="pt-2 space-y-2">
@@ -509,6 +558,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [bulkFetching, setBulkFetching] = useState(false);
+  const [bulkFetchKind, setBulkFetchKind] = useState<'full' | 'prices_only' | null>(null);
   const [bulkProgress, setBulkProgress] = useState({ completed: 0, total: 0 });
   const bulkAbortRef = useRef<AbortController | null>(null);
   const [showScanner, setShowScanner] = useState(false);
@@ -518,24 +568,32 @@ export default function App() {
     [filters, inventory, priceCache],
   );
 
-  const startBulkPriceFetch = async () => {
-    if (!config.ebay.apiKey && !config.firecrawl.apiKey) return;
+  const catalogGuideMedianSum = useMemo(
+    () => STICKER_CATALOG.reduce((sum, s) => sum + (priceCache[s.id]?.median ?? 0), 0),
+    [priceCache],
+  );
+
+  const startBulkPriceFetch = async (mode: 'full' | 'prices_only') => {
+    if (!hasPricingSource(config)) return;
     bulkAbortRef.current?.abort();
     const ac = new AbortController();
     bulkAbortRef.current = ac;
+    const preserveVisuals = mode === 'prices_only';
     setBulkFetching(true);
+    setBulkFetchKind(mode);
     setBulkProgress({ completed: 0, total: STICKER_CATALOG.length });
     try {
       await fetchAllStickerPrices(
         STICKER_CATALOG,
         config.ebay.apiKey,
-        config.firecrawl.apiKey,
+        resolveFirecrawlKey(config.firecrawl.apiKey),
         {
           signal: ac.signal,
-          delayMs: 480,
+          delayMs: 200,
+          concurrency: 5,
           onProgress: ({ completed, total }) => setBulkProgress({ completed, total }),
           onEach: (id, data) => {
-            if (data) updateMarketData(id, data);
+            if (data) updateMarketData(id, data, { preserveVisuals });
           },
         },
       );
@@ -543,6 +601,7 @@ export default function App() {
       if ((e as Error).name !== 'AbortError') console.error(e);
     } finally {
       setBulkFetching(false);
+      setBulkFetchKind(null);
       bulkAbortRef.current = null;
     }
   };
@@ -590,6 +649,28 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* ── Hero (Claude vault visualizer) ── */}
+        <section className="relative overflow-hidden rounded-2xl border border-db-blue/25 bg-gradient-to-br from-db-navy-light via-db-navy to-db-navy-mid shadow-lg shadow-black/20">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_80%_at_100%_0%,rgba(242,101,34,0.18),transparent_55%),radial-gradient(ellipse_70%_60%_at_0%_100%,rgba(171,71,188,0.12),transparent_50%)]" />
+          <div className="relative px-6 py-10 md:px-10 md:py-12">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.35em] text-db-orange">Collector visualizer</p>
+            <h2 className="font-display text-5xl leading-[0.92] tracking-wide text-db-cream md:text-7xl">THE VAULT</h2>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-db-cream/55 md:text-base">
+              Browse the full Dutch Bros sticker archive with{' '}
+              <span className="text-db-gold/90">pre-seeded price guides</span> (low / median / high) on every release.
+              Connect eBay or Firecrawl in settings to refresh comps and pull listing photos into the grid.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2 font-mono text-[11px] text-db-cream/40">
+              <span className="rounded border border-db-blue/30 bg-db-blue/20 px-2.5 py-1">{STICKER_CATALOG.length} cataloged</span>
+              <span className="rounded border border-db-blue/30 bg-db-blue/20 px-2.5 py-1">Grid · List · Timeline</span>
+              <span className="rounded border border-db-cyan/25 bg-db-cyan/10 px-2.5 py-1 text-db-cyan/70">Guide = est. market</span>
+              <span className="rounded border border-db-gold/30 bg-db-gold/10 px-2.5 py-1 text-db-gold/80">
+                Σ medians ~{formatCurrency(catalogGuideMedianSum)}
+              </span>
+            </div>
+          </div>
+        </section>
+
         {/* ── Stats ── */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <StatCard label="Unique Owned" value={stats.totalUnique} sub={`of ${stats.totalCatalog}`} icon={Package} color="#66BB6A" />
@@ -600,33 +681,48 @@ export default function App() {
           <StatCard label="Missing" value={stats.missingCount} icon={Heart} color="#EF5350" />
         </div>
 
-        {(config.ebay.apiKey || config.firecrawl.apiKey) && (
-          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 bg-db-navy-light border border-db-blue/30 rounded-xl px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={startBulkPriceFetch}
-                disabled={bulkFetching}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-db-orange/90 hover:bg-db-orange text-white font-display tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <RefreshCw size={14} className={bulkFetching ? 'animate-spin' : ''} />
-                {bulkFetching
-                  ? `Fetching… ${bulkProgress.completed} / ${bulkProgress.total}`
-                  : `Fetch all prices & photos (${STICKER_CATALOG.length})`}
-              </button>
-              {bulkFetching && (
+        {hasPricingSource(config) && (
+          <div className="flex flex-col gap-3 bg-db-navy-light border border-db-blue/30 rounded-xl px-4 py-3">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={stopBulkPriceFetch}
-                  className="text-xs text-db-cream/50 hover:text-db-orange px-2 py-1"
+                  onClick={() => startBulkPriceFetch('full')}
+                  disabled={bulkFetching}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-db-orange/90 hover:bg-db-orange text-white font-display tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  Stop
+                  <RefreshCw size={14} className={bulkFetching && bulkFetchKind === 'full' ? 'animate-spin' : ''} />
+                  {bulkFetching && bulkFetchKind === 'full'
+                    ? `Fetching… ${bulkProgress.completed} / ${bulkProgress.total}`
+                    : `Fetch all prices & photos (${STICKER_CATALOG.length})`}
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => startBulkPriceFetch('prices_only')}
+                  disabled={bulkFetching}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm bg-db-blue/40 hover:bg-db-blue/55 border border-db-blue/35 text-db-cream font-display tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <RefreshCw size={14} className={bulkFetching && bulkFetchKind === 'prices_only' ? 'animate-spin' : ''} />
+                  {bulkFetching && bulkFetchKind === 'prices_only'
+                    ? `Prices… ${bulkProgress.completed} / ${bulkProgress.total}`
+                    : `Prices only — keep photos (${STICKER_CATALOG.length})`}
+                </button>
+                {bulkFetching && (
+                  <button
+                    type="button"
+                    onClick={stopBulkPriceFetch}
+                    className="text-xs text-db-cream/50 hover:text-db-orange px-2 py-1"
+                  >
+                    Stop
+                  </button>
+                )}
+              </div>
             </div>
-            <p className="text-[10px] text-db-cream/40 leading-relaxed flex-1 min-w-[14rem]">
-              Images are not from a separate open-source pack — they are listing thumbnails from the same eBay results as
-              each price pull. One request per sticker (~0.5s apart) to stay kind to APIs.
+            <p className="text-[10px] text-db-cream/40 leading-relaxed min-w-[14rem]">
+              <span className="text-db-cream/50">Photos</span> come from listing thumbnails on the same pull as prices.
+              Use <span className="text-db-cream/55">Prices only</span> to refresh low/median/high (and comp metadata)
+              while keeping thumbnails you already have — API work is the same; your vault UI stays stable.
+              Firecrawl runs up to <span className="text-db-cream/55">5 scrapes at a time</span> (~30–60s each).
             </p>
           </div>
         )}

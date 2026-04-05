@@ -15,25 +15,19 @@
  * VITE_FIRECRAWL_API_KEY — Firecrawl API key
  *
  * Localhost: Vite proxies `/ebay-api` → `api.ebay.com` so the Browse API works without CORS errors.
- * A production deploy needs a server-side proxy or calls will be blocked by the browser.
+ * Firecrawl is called directly from the browser (`api.firecrawl.dev` allows CORS). No deploy required for pricing.
+ * A production deploy still needs a server-side eBay proxy or Browse calls will be CORS-blocked.
  */
 
-import type { EbaySale, PriceData } from '../types';
+import type { EbaySale, EbaySearchResult, PriceData } from '../types';
+import { pickSingleStickerComps } from './listingCompFilter';
+
+export type { EbaySearchResult };
 
 const EBAY_API_DIRECT = 'https://api.ebay.com';
 
 function ebayApiOrigin(): string {
   return import.meta.env.DEV ? '/ebay-api' : EBAY_API_DIRECT;
-}
-
-export interface EbaySearchResult {
-  title: string;
-  price: number;
-  currency: string;
-  condition: string;
-  imageUrl?: string;
-  itemUrl: string;
-  endDate: string;
 }
 
 /**
@@ -48,7 +42,7 @@ export async function searchEbayAPI(
       q: query,
       filter: 'buyingOptions:{FIXED_PRICE|AUCTION},conditionIds:{1000|1500|2000|2500|3000}',
       sort: '-endDate',
-      limit: '20',
+      limit: '30',
     });
 
     const response = await fetch(
@@ -121,17 +115,34 @@ export async function searchEbayFirecrawl(
               },
             },
           },
-          prompt: 'Extract all sold listing items with their title, sold price (just the number), date sold, condition, image URL, and item URL.',
+          prompt:
+            'Extract up to 25 sold/completed listing rows from this eBay results page, in visible order (newest first). ' +
+            'For each row include: title, sold price (number only), date sold, condition, image URL, item URL. ' +
+            'Include every distinct listing you can see — we will filter for single-sticker sales downstream.',
         },
       }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      throw new Error(`Firecrawl error: ${response.status}`);
+      const msg =
+        typeof data?.error === 'string'
+          ? data.error
+          : `HTTP ${response.status}`;
+      console.error('Firecrawl scrape failed:', msg, data);
+      return [];
     }
 
-    const data = await response.json();
+    if (data?.success === false) {
+      console.error('Firecrawl scrape failed:', data?.error || data);
+      return [];
+    }
+
     const listings = data?.data?.extract?.listings || [];
+    if (listings.length === 0 && data?.data?.warning) {
+      console.warn('Firecrawl warning:', data.data.warning);
+    }
 
     return listings.map((item: any) => ({
       title: item.title || '',
@@ -149,7 +160,8 @@ export async function searchEbayFirecrawl(
 }
 
 /**
- * Calculate price data from search results
+ * Calculate low/median/high and thumbnails from **already-filtered** single-sticker comps
+ * (typically 3–5 rows from `pickSingleStickerComps`).
  */
 export function calculatePriceData(
   results: EbaySearchResult[],
@@ -174,7 +186,7 @@ export function calculatePriceData(
   const median =
     prices.length % 2 !== 0 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
 
-  const recentSales: EbaySale[] = results.slice(0, 10).map((r) => ({
+  const recentSales: EbaySale[] = results.slice(0, 8).map((r) => ({
     title: r.title,
     price: r.price,
     date: r.endDate,
@@ -204,19 +216,23 @@ export async function fetchStickerPrice(
   ebayKey?: string,
   firecrawlKey?: string,
 ): Promise<PriceData | null> {
-  // Try eBay API first
-  if (ebayKey) {
-    const results = await searchEbayAPI(query, ebayKey);
-    if (results.length > 0) {
-      return calculatePriceData(results, 'ebay_api');
+  const pick = (raw: EbaySearchResult[]) =>
+    pickSingleStickerComps(raw, { searchQuery: query, maxSamples: 5 });
+
+  // Prefer Firecrawl when configured — sold listing page (comps). Browse API is active asks.
+  if (firecrawlKey) {
+    const raw = await searchEbayFirecrawl(query, firecrawlKey);
+    const comps = pick(raw);
+    if (comps.length > 0) {
+      return calculatePriceData(comps, 'firecrawl');
     }
   }
 
-  // Fallback to Firecrawl
-  if (firecrawlKey) {
-    const results = await searchEbayFirecrawl(query, firecrawlKey);
-    if (results.length > 0) {
-      return calculatePriceData(results, 'firecrawl');
+  if (ebayKey) {
+    const raw = await searchEbayAPI(query, ebayKey);
+    const comps = pick(raw);
+    if (comps.length > 0) {
+      return calculatePriceData(comps, 'ebay_api');
     }
   }
 
@@ -228,16 +244,18 @@ function sleep(ms: number): Promise<void> {
 }
 
 export interface FetchAllPricesOptions {
-  /** Space out requests to reduce rate-limit risk (ms between stickers). */
+  /** Space out requests to reduce rate-limit risk (ms after each finished sticker, per worker). */
   delayMs?: number;
+  /** In-flight fetches at once. Firecrawl is ~30–60s each; sequential is very slow — default 5. */
+  concurrency?: number;
   signal?: AbortSignal;
   onProgress?: (p: { completed: number; total: number; currentId: string }) => void;
   onEach?: (stickerId: string, data: PriceData | null) => void;
 }
 
 /**
- * Sequentially fetch market data for every sticker. Only successful fetches should
- * be written to the store (callers typically ignore null results).
+ * Fetch market data for every sticker with bounded parallelism. Successful fetches
+ * are passed to `onEach`; null means no comps (callers often skip persisting).
  *
  * eBay Browse API returns **active** listings (asking prices). Firecrawl uses **sold**
  * listing pages when configured — often closer to “comps.”
@@ -249,20 +267,33 @@ export async function fetchAllStickerPrices(
   options?: FetchAllPricesOptions,
 ): Promise<void> {
   const delayMs = options?.delayMs ?? 500;
+  const rawConcurrency = options?.concurrency ?? 5;
+  const concurrency = Math.max(1, Math.min(20, rawConcurrency));
   const total = stickers.length;
   const signal = options?.signal;
 
-  for (let i = 0; i < total; i++) {
-    if (signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
+  if (total === 0) return;
+
+  let nextIndex = 0;
+  let completed = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+      const i = nextIndex++;
+      if (i >= total) return;
+
+      const s = stickers[i];
+      const data = await fetchStickerPrice(s.ebaySearchQuery, ebayKey, firecrawlKey);
+      options?.onEach?.(s.id, data);
+      completed += 1;
+      options?.onProgress?.({ completed, total, currentId: s.id });
+
+      if (delayMs > 0) await sleep(delayMs);
     }
-    const s = stickers[i];
-    options?.onProgress?.({ completed: i, total, currentId: s.id });
-
-    const data = await fetchStickerPrice(s.ebaySearchQuery, ebayKey, firecrawlKey);
-    options?.onEach?.(s.id, data);
-    options?.onProgress?.({ completed: i + 1, total, currentId: s.id });
-
-    if (i < total - 1) await sleep(delayMs);
   }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
 }
