@@ -1,6 +1,6 @@
 /**
  * PRE-SEEDED PRICE CACHE
- * Prices compiled from eBay sold/active listings as of March 2026.
+ * Prices compiled from eBay sold/active listings and collector channels (updated May 2026).
  *
  * Sources:
  * - ducthcollectables (eBay, 1150+ sold, $2.50 base)
@@ -28,6 +28,7 @@ export const PRESEEDED_PRICES: Record<string, { low: number; median: number; hig
   'db-2020-05-may-dane-2020': { low: 5.00, median: 10.00, high: 20.00, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-2020-06-june-2020': { low: 4.00, median: 8.00, high: 15.00, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-2020-07-july-2020': { low: 4.00, median: 8.00, high: 15.00, lastUpdated: '2026-03-31T00:00:00Z' },
+  'db-2020-10-silver-windmill-logo': { low: 8.00, median: 15.00, high: 30.00, lastUpdated: '2026-05-20T00:00:00Z' },
   'db-2020-08-yellow-mountains': { low: 8.00, median: 15.00, high: 30.00, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-2020-09-september-2020': { low: 4.00, median: 8.00, high: 15.00, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-2020-10-october-2020': { low: 5.00, median: 10.00, high: 20.00, lastUpdated: '2026-03-31T00:00:00Z' },
@@ -144,7 +145,48 @@ export const PRESEEDED_PRICES: Record<string, { low: number; median: number; hig
   'db-2026-01-dj-sun-turntable':        { low: 1.50, median: 2.00, high: 3.00, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-2026-02-good-times-calling-brick-phone': { low: 1.50, median: 2.25, high: 3.50, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-2026-02-heart-sunglasses-dutch-luv': { low: 1.50, median: 2.25, high: 3.50, lastUpdated: '2026-03-31T00:00:00Z' },
-  'db-2026-03-march-2026-set':          { low: 2.00, median: 3.00, high: 4.99, lastUpdated: '2026-03-31T00:00:00Z' },
+  'db-2026-03-green-skateboard-turtle-windmill': { low: 1.50, median: 2.50, high: 4.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-03-lucky-rainbow':           { low: 3.00, median: 5.00, high: 8.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-03-lucky-bunny':             { low: 3.00, median: 5.00, high: 8.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-03-lucky-clover':            { low: 3.00, median: 5.00, high: 8.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-03-lucky-coin':              { low: 3.00, median: 5.00, high: 8.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-03-lucky-dice-windmill':     { low: 4.00, median: 6.00, high: 10.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-03-shooting-star-windmill':  { low: 4.00, median: 6.00, high: 10.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-03-march-2026-lucky-set':    { low: 18.00, median: 28.00, high: 35.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  // Legacy ID — users may still have inventory under the old lump entry
+  'db-2026-03-march-2026-set':          { low: 18.00, median: 28.00, high: 35.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-special-second-chance-420-design-1': { low: 8.00, median: 15.00, high: 25.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2026-special-second-chance-420-design-2': { low: 8.00, median: 15.00, high: 25.00, lastUpdated: '2026-05-20T00:00:00Z' },
+
+  // 2025 gaps
+  'db-2025-05-dane-end-als-2025':       { low: 3.00, median: 5.00, high: 12.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-09-bfk-balloon-dog-2025':    { low: 2.50, median: 4.00, high: 8.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-09-bfk-flying-dinosaur-2025': { low: 3.00, median: 5.00, high: 10.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-09-bfk-monster-truck-2025':  { low: 2.50, median: 4.00, high: 8.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-06-scavenger-hunt-sun':      { low: 3.00, median: 6.00, high: 12.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-06-scavenger-hunt-tv':        { low: 3.00, median: 5.00, high: 10.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-06-scavenger-hunt-always-stoked': { low: 3.00, median: 5.00, high: 10.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-06-scavenger-hunt-dog':      { low: 3.00, median: 5.00, high: 10.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-06-scavenger-hunt-cup-head': { low: 3.00, median: 6.00, high: 12.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-02-strawberry-cow-dutch-luv': { low: 4.00, median: 8.00, high: 15.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-special-cold-brew-day-2025': { low: 3.00, median: 6.00, high: 12.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-special-california-bear-db-ca': { low: 6.00, median: 12.00, high: 25.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-special-colorado-sun-regional': { low: 8.00, median: 15.00, high: 30.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-special-san-antonio-fiesta': { low: 6.00, median: 12.00, high: 22.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-special-colorado-springs-go': { low: 5.00, median: 10.00, high: 20.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-special-peoria-az-go':       { low: 4.00, median: 8.00, high: 15.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2025-special-overland-park-ks-go': { low: 4.00, median: 8.00, high: 15.00, lastUpdated: '2026-05-20T00:00:00Z' },
+
+  // 2024 gaps
+  'db-2024-special-chainfest-la':       { low: 80.00, median: 160.00, high: 200.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2024-special-chainfest-stand-variant': { low: 75.00, median: 150.00, high: 190.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2024-special-rebels-unite-eclipse': { low: 5.00, median: 10.00, high: 20.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2024-09-mini-rubber-ducky-drop':  { low: 5.00, median: 10.00, high: 25.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2024-special-baldwin-park-ca-go': { low: 4.00, median: 8.00, high: 15.00, lastUpdated: '2026-05-20T00:00:00Z' },
+
+  // 2022–2023 gaps
+  'db-2022-special-cold-brew-day-2022': { low: 4.00, median: 8.00, high: 18.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2023-special-cold-brew-day-2023': { low: 4.00, median: 7.00, high: 15.00, lastUpdated: '2026-05-20T00:00:00Z' },
 
   // ═══════════════════════════════════════
   // SPECIALS / REGIONAL / GRAND OPENING
@@ -158,6 +200,9 @@ export const PRESEEDED_PRICES: Record<string, { low: number; median: number; hig
   'db-0-special-sacramento-good-vibes': { low: 5.00, median: 12.00, high: 23.00, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-0-special-regional-arden': { low: 5.00, median: 10.00, high: 20.00, lastUpdated: '2026-03-31T00:00:00Z' },
   'db-0-special-regional-las-vegas': { low: 5.00, median: 12.00, high: 22.00, lastUpdated: '2026-03-31T00:00:00Z' },
+  'db-0-special-regional-wyoming': { low: 10.00, median: 20.00, high: 40.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-0-special-regional-texas-coffee-is-metal': { low: 6.00, median: 12.00, high: 22.00, lastUpdated: '2026-05-20T00:00:00Z' },
+  'db-2024-special-sacramento-10th-anniversary': { low: 6.00, median: 12.00, high: 25.00, lastUpdated: '2026-05-20T00:00:00Z' },
   'db-2026-special-one-broista-mini-charms': { low: 12.00, median: 25.00, high: 50.00, lastUpdated: '2026-03-31T00:00:00Z' },
 };
 
